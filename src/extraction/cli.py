@@ -1,19 +1,15 @@
-"""Command-line interface for the figure-extraction framework.
+"""Command-line interface: extract figures + captions from a PDF.
 
 Examples::
 
-    # Deterministic extraction (default — no model, no credentials needed)
-    python -m src.extraction.cli paper.pdf -o dataset
+    # Extract into ./dataset/<pdf-stem>/
+    python -m src.extraction.cli paper.pdf
 
-    # Most conservative: crop panels only from PDF text markers
-    python -m src.extraction.cli paper.pdf -o dataset --cropping markers-only
+    # Custom output directory and DPI
+    python -m src.extraction.cli paper.pdf -o out --dpi 400
 
-    # Vision-assisted grid audit for hard layouts (needs a capable model)
-    python -m src.extraction.cli paper.pdf -o dataset --cropping vlm-assisted \\
-        --provider ollama --model qwen2.5vl:7b
-
-    # From a JSON configuration file
-    python -m src.extraction.cli paper.pdf -o dataset --config extraction.json
+    # Force the caption-anchor heuristics (skip the layout model)
+    python -m src.extraction.cli paper.pdf --no-layout-model
 """
 
 from __future__ import annotations
@@ -25,17 +21,15 @@ from pathlib import Path
 
 from dotenv import load_dotenv
 
-from src.extraction.framework import ExtractionConfig, FigureExtractionFramework
+from src.extraction.exporter import DatasetExporter
+from src.parsing.pdf_parser import ScientificPDFParser
 
 
 def build_arg_parser() -> argparse.ArgumentParser:
     """Builds the CLI argument parser."""
     parser = argparse.ArgumentParser(
         prog="python -m src.extraction.cli",
-        description=(
-            "Extract figures and subfigure panels from a scientific PDF into "
-            "a structured dataset."
-        ),
+        description="Extract figures and their captions from a scientific PDF.",
     )
     parser.add_argument("pdf", type=Path, help="Path to the scientific PDF.")
     parser.add_argument(
@@ -46,31 +40,20 @@ def build_arg_parser() -> argparse.ArgumentParser:
         help="Dataset output directory (default: ./dataset).",
     )
     parser.add_argument(
-        "--cropping",
-        choices=["deterministic", "markers-only", "vlm-assisted"],
-        default=None,
-        help="Panel-crop strategy (default: deterministic).",
-    )
-    parser.add_argument(
-        "--provider",
-        default=None,
-        help="Vision provider: openai | anthropic | ollama (vlm-assisted only).",
-    )
-    parser.add_argument(
-        "--model",
-        default=None,
-        help="Vision model identifier (default: env / provider default).",
-    )
-    parser.add_argument(
-        "--config",
-        type=Path,
-        default=None,
-        help="JSON configuration file (CLI flags override its values).",
-    )
-    parser.add_argument(
         "--name",
         default=None,
         help="Dataset folder name (default: the PDF's file stem).",
+    )
+    parser.add_argument(
+        "--dpi",
+        type=int,
+        default=300,
+        help="Render resolution for extracted figures (default: 300).",
+    )
+    parser.add_argument(
+        "--no-layout-model",
+        action="store_true",
+        help="Skip DocLayout-YOLO; use caption-anchor heuristics only.",
     )
     parser.add_argument(
         "-v", "--verbose", action="store_true", help="Enable debug logging."
@@ -92,22 +75,14 @@ def main(argv: list = None) -> int:
     )
     logger = logging.getLogger("extraction.cli")
 
-    config = (
-        ExtractionConfig.from_json(args.config) if args.config else ExtractionConfig()
+    # None → respect the LAYOUT_DETECTION env var; --no-layout-model forces off.
+    parser = ScientificPDFParser(
+        resolution=args.dpi,
+        use_layout_model=False if args.no_layout_model else None,
     )
-    # Explicit CLI flags override the configuration file.
-    if args.cropping:
-        config = config.model_copy(update={"panel_cropping": args.cropping})
-    if args.provider:
-        config = config.model_copy(update={"provider": args.provider})
-    if args.model:
-        config = config.model_copy(update={"model": args.model})
-
-    framework = FigureExtractionFramework(config=config)
     try:
-        paper_dir = framework.extract_to_dataset(
-            args.pdf, args.output, paper_name=args.name
-        )
+        document = parser.parse(args.pdf)
+        paper_dir = DatasetExporter(args.output).export(document, paper_name=args.name)
     except FileNotFoundError as exc:
         logger.error("%s", exc)
         return 2
@@ -115,7 +90,9 @@ def main(argv: list = None) -> int:
         logger.exception("Extraction failed")
         return 1
 
-    logger.info("Done — dataset at %s", paper_dir)
+    logger.info(
+        "Done — %d figure(s) at %s", len(document.figures), paper_dir
+    )
     return 0
 
 

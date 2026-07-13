@@ -36,8 +36,8 @@ terminal log output (the app logs every pipeline stage).
 
 - OS: [e.g. Ubuntu 24.04, Windows 11, macOS 15]
 - Python version: [e.g. 3.11.9]
-- Package versions: output of `pip freeze | grep -Ei "streamlit|pdfplumber|pillow|langchain|pydantic"`
-- VLM provider/model: [e.g. openai / gpt-4o]
+- Package versions: output of `pip freeze | grep -Ei "streamlit|pdfplumber|pillow|doclayout|pydantic"`
+- Figure detector: layout model (DocLayout-YOLO) or caption-anchor heuristics?
 
 ## PDF characteristics (for extraction bugs)
 

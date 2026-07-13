@@ -15,10 +15,9 @@ figures whose captions sit above the plot..."*
 
 What you want to happen, and — if relevant — where it fits in the pipeline:
 
-- [ ] Stage 1 — Layout parsing & high-res cropping (`src/parsing`)
-- [ ] Stage 2 — Contextual enrichment / multimodal RAG (`src/rag`)
-- [ ] Stage 3 — VLM querying (`src/vision`)
-- [ ] Stage 4 — Streamlit dashboard (`src/api`)
+- [ ] Figure/caption detection (`src/parsing`)
+- [ ] Dataset export / CLI (`src/extraction`)
+- [ ] Streamlit viewer (`src/api`)
 - [ ] Other (docs, packaging, CI, ...)
 
 ## Describe alternatives you've considered
